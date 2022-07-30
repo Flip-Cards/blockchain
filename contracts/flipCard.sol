@@ -69,7 +69,7 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     }
 
     modifier onlyUpdateMember() {
-        require(isUpdateMember(msg.sender));
+        require(isUpdateMember(msg.sender),"Member is not allowed to update the NFT");
         _;
     }
 
@@ -90,7 +90,8 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         require(
             _role == MINTER_ROLE ||
                 _role == HANDLER_ROLE ||
-                _role == BOOK_KEEPER_ROLE
+                _role == BOOK_KEEPER_ROLE,
+                "Defined role doesn't exists"
         );
         grantRole(_role, _member);
     }
@@ -182,7 +183,7 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         uint256,
         bytes calldata
     ) external pure returns (bytes4) {
-        bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
+        return bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
     }
 
     function supportsInterface(bytes4 interfaceId)
