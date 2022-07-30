@@ -23,11 +23,17 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         //This way the person initializing the blockchain have all the necessary roles
         //These roles are just provided for readiblity and scope assessment, just DEFAULT_ADMIN_ROLE is equivalent to these
 
-        makeSuperAdmin(msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
+        _grantRole(HANDLER_ROLE, msg.sender);
+        _grantRole(BOOK_KEEPER_ROLE, msg.sender);
 
         //when the contract lits up we want to assign the default address to brandAddress
         brandAddress = 0x6fA75265a8A8CfEB7eB798248fab22dAe8b9bccD;
-        makeSuperAdmin(brandAddress);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
+        _grantRole(HANDLER_ROLE, msg.sender);
+        _grantRole(BOOK_KEEPER_ROLE, msg.sender);
         //This way the brand owner will be the Admin since the contract starts
     }
 
@@ -57,6 +63,7 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         _;
     }
 
+    /// Return 'true' if the account can update the NFT
     function isUpdateMember(address _account)
         public
         view
@@ -69,12 +76,16 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     }
 
     modifier onlyUpdateMember() {
-        require(isUpdateMember(msg.sender),"Member is not allowed to update the NFT");
+        require(
+            isUpdateMember(msg.sender),
+            "Member is not allowed to update the NFT"
+        );
         _;
     }
 
     ///updates all the present roles for the given address
-    function makeSuperAdmin(address _member) public virtual onlyAdmin {
+    ///Ths private function will not be accessible outside the blockchain
+    function makeSuperAdmin(address _member) private {
         addRole(_member, MINTER_ROLE);
         addRole(_member, DEFAULT_ADMIN_ROLE);
         addRole(_member, HANDLER_ROLE);
@@ -91,7 +102,7 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
             _role == MINTER_ROLE ||
                 _role == HANDLER_ROLE ||
                 _role == BOOK_KEEPER_ROLE,
-                "Defined role doesn't exists"
+            "Defined role doesn't exists"
         );
         grantRole(_role, _member);
     }
@@ -128,14 +139,14 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     }
 
     /// batch mint NFTs
-    function safeMintBatch(address to, bytes32[] memory _newTokenURIs)
+    function safeMintBatch(address to, string[] calldata _newTokenURIs)
         public
         onlyMinter
     {
         uint256 i = 0;
         for (i = 0; i < _newTokenURIs.length; i++) {
             //batch mint NFTs from the given array of token containing tokenURIs
-            safeMint(to, bytes32ToString(_newTokenURIs[i]));
+            safeMint(to, _newTokenURIs[i]);
         }
     }
 
@@ -183,7 +194,10 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         uint256,
         bytes calldata
     ) external pure returns (bytes4) {
-        return bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
+        return
+            bytes4(
+                keccak256("onERC721Received(address,address,uint256,bytes)")
+            );
     }
 
     function supportsInterface(bytes4 interfaceId)
