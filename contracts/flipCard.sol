@@ -15,21 +15,27 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     bytes32 public constant BOOK_KEEPER_ROLE = keccak256("BOOK_KEEPER_ROLE"); // can transfer the NFTs to anyone & update their issue dates
     Counters.Counter private _tokenIdCounter;
 
+    //This is the brand head wallet address to make them the default admin on the blockchain
+    address public brandAddress;
+
     constructor() ERC721("FlipCards", "FCRDS") {
         //Called when the blockchain starts
         //This way the person initializing the blockchain have all the necessary roles
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         //These roles are just provided for readiblity and scope assessment, just DEFAULT_ADMIN_ROLE is equivalent to these
-        _grantRole(MINTER_ROLE, msg.sender);
-        _grantRole(HANDLER_ROLE, msg.sender);
-        _grantRole(BOOK_KEEPER_ROLE, msg.sender);
+
+        makeSuperAdmin(msg.sender);
+
+        //when the contract lits up we want to assign the default address to brandAddress
+        brandAddress = 0x6fA75265a8A8CfEB7eB798248fab22dAe8b9bccD;
+        makeSuperAdmin(brandAddress);
+        //This way the brand owner will be the Admin since the contract starts
     }
 
     /// Return 'true' if the account belongs to a minter
-    function isMinter(address account) public view virtual returns (bool) {
+    function isMinter(address _account) public view virtual returns (bool) {
         return
-            hasRole(DEFAULT_ADMIN_ROLE, account) ||
-            hasRole(MINTER_ROLE, account);
+            hasRole(DEFAULT_ADMIN_ROLE, _account) ||
+            hasRole(MINTER_ROLE, _account);
     }
 
     /// Restricted to the minters of the NFT
@@ -40,8 +46,8 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     }
 
     /// Return 'true' if the account is the admin account
-    function isAdmin(address account) public view virtual returns (bool) {
-        return hasRole(DEFAULT_ADMIN_ROLE, account);
+    function isAdmin(address _account) public view virtual returns (bool) {
+        return hasRole(DEFAULT_ADMIN_ROLE, _account);
     }
 
     /// Restricted to the minters of the NFT
@@ -51,25 +57,97 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         _;
     }
 
+    function isUpdateMember(address _account)
+        public
+        view
+        virtual
+        returns (bool)
+    {
+        return
+            hasRole(DEFAULT_ADMIN_ROLE, _account) ||
+            hasRole(BOOK_KEEPER_ROLE, _account);
+    }
+
+    modifier onlyUpdateMember() {
+        require(isUpdateMember(msg.sender));
+        _;
+    }
+
+    ///updates all the present roles for the given address
+    function makeSuperAdmin(address _member) public virtual onlyAdmin {
+        addRole(_member, MINTER_ROLE);
+        addRole(_member, DEFAULT_ADMIN_ROLE);
+        addRole(_member, HANDLER_ROLE);
+        addRole(_member, BOOK_KEEPER_ROLE);
+    }
+
     /// updates the roles for the passed address
-    function addRole(address member, bytes32 role) public virtual onlyAdmin {
+    function addRole(address _member, bytes32 _role) public virtual onlyAdmin {
         /**
         member -> address of user whose role we need to update
         role -> string defining the role for member
          */
         require(
-            role == MINTER_ROLE ||
-                role == HANDLER_ROLE ||
-                role == BOOK_KEEPER_ROLE
+            _role == MINTER_ROLE ||
+                _role == HANDLER_ROLE ||
+                _role == BOOK_KEEPER_ROLE
         );
-        grantRole(role, member);
+        grantRole(_role, _member);
     }
 
+    /// Safely mint a new NFT
     function safeMint(address to, string memory uri) public onlyMinter {
+        /**
+        to -> contract address on which the NFT needs to be minted
+        uri -> The uri of the token generating
+         */
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, uri);
+    }
+
+    ///utility function to convert a byte32 into a string
+    function bytes32ToString(bytes32 x) public pure returns (string memory) {
+        bytes memory bytesString = new bytes(32);
+        uint256 charCount = 0;
+        uint256 j;
+        for (j = 0; j < 32; j++) {
+            bytes1 char = bytes1(bytes32(uint256(x) * 2**(8 * j)));
+            if (char != 0) {
+                bytesString[charCount] = char;
+                charCount++;
+            }
+        }
+        bytes memory bytesStringTrimmed = new bytes(charCount);
+        for (j = 0; j < charCount; j++) {
+            bytesStringTrimmed[j] = bytesString[j];
+        }
+        return string(bytesStringTrimmed);
+    }
+
+    /// batch mint NFTs
+    function safeMintBatch(address to, bytes32[] memory _newTokenURIs)
+        public
+        onlyMinter
+    {
+        uint256 i = 0;
+        for (i = 0; i < _newTokenURIs.length; i++) {
+            //batch mint NFTs from the given array of token containing tokenURIs
+            safeMint(to, bytes32ToString(_newTokenURIs[i]));
+        }
+    }
+
+    function updateTokenUri(uint256 _tokenId, string memory _tokenURI)
+        public
+        onlyUpdateMember
+        returns (bool)
+    {
+        /**
+        Only user with the access to the updation request can update the URI token
+         */
+        _setTokenURI(_tokenId, _tokenURI);
+        return true;
     }
 
     // The following functions are overrides required by Solidity.
@@ -80,9 +158,14 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     {
         super._burn(tokenId);
     }
-    function heartbear() public returns(uint256){
+
+    function heartbeat() public pure returns (uint256) {
+        /**
+        Helps to check on the connecting frontend if the connectino is possible
+         */
         return 1;
     }
+
     function tokenURI(uint256 tokenId)
         public
         view
@@ -90,6 +173,16 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         returns (string memory)
     {
         return super.tokenURI(tokenId);
+    }
+
+    //// when token is sent on this chain it must return the magic value
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external pure returns (bytes4) {
+        bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
     }
 
     function supportsInterface(bytes4 interfaceId)
