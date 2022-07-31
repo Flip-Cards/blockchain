@@ -9,6 +9,7 @@ import "openzeppelin-solidity/contracts/utils/Counters.sol";
 
 contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     using Counters for Counters.Counter;
+
     bytes32 public constant NOT_STARTED = keccak256("NOT_STARTED"); // the warranty application isn't started yet
     bytes32 public constant STARTED = keccak256("STARTED"); // the warranty application is started
 
@@ -18,19 +19,33 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     Counters.Counter private _tokenIdCounter;
 
     /**
-        Warranty status are use to implement two way handshake for warranty
-        this way only client + seller's combination = updation
+        Private mapping for functionality of blockchain
+        These mappings helps to keep track of attributes associated with each tokenId
      */
 
+    /// mapping of tokenId to date it was published on
     mapping(uint256 => uint256) private tokenuri_to_publish_date;
+
+    /// mapping of serial number of product to tokenId of Warranty Card
     mapping(string => uint256) private serial_number_to_token;
+
+    ///mapping of tokenId to status of repair for that token can have two values
+    ///NOT_STARTED or STARTED (client side / customer)
     mapping(uint256 => bytes32) private user_warranty_status;
+
+    ///mapping of tokenId to status of repair for that token can have two values
+    ///NOT_STARTED or STARTED (company side)
     mapping(uint256 => bytes32) private company_warranty_status;
-    //stores the repair requests that are done for a single NFT
+
+    ///stores the repair requests that are done for a single NFT
     mapping(uint256 => uint256[]) private nft_warranties;
 
+    ///Maximum warranty period of a product
     uint256 private WARRANTY_PERIOD;
 
+    /**
+    Public function to check the status of a repair request signed by a customer for a NFT token
+     */
     function getUserWarrantyStatus(uint256 _tokenID)
         public
         view
@@ -48,6 +63,11 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         return nft_warranties[_tokenURI];
     }
 
+    /**
+    The owner of NFT can trigger a repair request by calling this function
+    It updates on blockchain that a repair request is signed by the product owner and 
+    is reflected on the Warranty Card
+     */
     function updateUserWarranty(uint256 _tokenURI) public {
         //If the user sending the update request for the NFT actually holds it
         require(ownerOf(_tokenURI) == msg.sender);
@@ -66,6 +86,11 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     /// Event triggered when a new repair request has been made
     event NewRepair(uint256 _tokenURI, uint256 date);
 
+    /**
+    This public function can be called by the owner of the blockchain or the 
+    allowed access control users. It registers on the blockchain that the repair request is now completed
+    and is reflected on the warranty card
+     */
     function updateCompanyWarranty(uint256 _tokenURI) public onlyUpdateMember {
         //An application process isn't started from the company's end
         require(company_warranty_status[_tokenURI] == NOT_STARTED);
@@ -87,7 +112,6 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     }
 
     //This is the brand head wallet address to make them the default admin on the blockchain
-
     address public brandAddress;
 
     constructor() ERC721("FlipCards", "FCRDS") {
@@ -158,14 +182,6 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         _;
     }
 
-    ///updates all the present roles for the given address
-    ///Ths private function will not be accessible outside the blockchain
-    // function makeSuperAdmin(address _member) private {
-    //     addRole(_member, MINTER_ROLE);
-    //     addRole(_member, DEFAULT_ADMIN_ROLE);
-    //     addRole(_member, HANDLER_ROLE);
-    //     addRole(_member, BOOK_KEEPER_ROLE);
-    // }
 
     /// updates the roles for the passed address
     function addRole(address _member, string memory role)
@@ -188,6 +204,7 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         grantRole(_role, _member);
     }
 
+    ///public function to count total number of warranty cards minted on the blockchain 
     function tokenSupply() public view returns (uint256) {
         return _tokenIdCounter.current();
     }
@@ -244,6 +261,10 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         }
     }
 
+    /**
+    public function which helps to get the tokenId of a warranty card when their serial number 
+    is passed as an argument
+     */
     function getURIToken(string memory _serialNumber)
         public
         view
@@ -252,6 +273,10 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         return serial_number_to_token[_serialNumber];
     }
 
+    /**
+    Update tokenURI can be called by only access controlled users
+    This public function updates the URIValue for the passed Token
+     */
     function updateTokenUri(uint256 _tokenId, string memory _tokenURI)
         public
         onlyUpdateMember
@@ -272,6 +297,10 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         super._burn(tokenId);
     }
 
+    /**
+    Helper function outside interfaces can use to check if they are connected to the blockchain 
+    and able to access the provided functions
+     */
     function heartbeat() public pure returns (uint256) {
         /**
         Helps to check on the connecting frontend if the connectino is possible
@@ -279,6 +308,7 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         return 1;
     }
 
+    /// get the tokenURI (ipfs url) for the provided tokenId
     function tokenURI(uint256 tokenId)
         public
         view
