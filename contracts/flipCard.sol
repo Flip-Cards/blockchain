@@ -9,13 +9,57 @@ import "openzeppelin-solidity/contracts/utils/Counters.sol";
 
 contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     using Counters for Counters.Counter;
+    bytes32 public constant NOT_STARTED = keccak256("NOT_STARTED"); // the warranty application isn't started yet 
+    bytes32 public constant STARTED = keccak256("STARTED"); // the warranty application is started
+
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE"); // can mint new NFTs
     bytes32 public constant HANDLER_ROLE = keccak256("HANDLER_ROLE"); //can handle repair and repairments
     bytes32 public constant BOOK_KEEPER_ROLE = keccak256("BOOK_KEEPER_ROLE"); // can transfer the NFTs to anyone & update their issue dates
     Counters.Counter private _tokenIdCounter;
 
+    /**
+        Warranty status are use to implement two way handshake for warranty
+        this way only client + seller's combination = updation
+     */
+    mapping(string => uint256) public serial_number_to_token;
+    mapping(uint256 => bytes32) public user_warranty_status;
+    mapping(uint256 => bytes32) public company_warranty_status;
+    //stores the repair requests that are done for a single NFT
+    mapping(uint256 => uint256[]) public nft_warranties;
+
+    function updateUserWarranty(uint256 _tokenURI) public {
+
+        //If the user sending the update request for the NFT actually holds it
+        require(ownerOf(_tokenURI) == msg.sender);
+        //A repair application should not have been running | A warranty repair application isn't already running
+        require(user_warranty_status[_tokenURI] == NOT_STARTED);
+
+        //update the status for the provided NFT
+        user_warranty_status[_tokenURI] = STARTED;
+    }
+
+    /// Event triggered when a new repair request has been made
+    event NewRepair(uint256 _tokenURI, uint256 date);
+
+    function updateCompanyWarranty(uint256 _tokenURI) public {
+
+        //An application process isn't started from the company's end
+        require(company_warranty_status[_tokenURI] == NOT_STARTED);
+        //The application process must've been started by the user
+        require(user_warranty_status[_tokenURI] == STARTED);
+
+        // emit a new repair request into the blockchain
+        emit NewRepair(_tokenURI, block.timestamp);
+
+        //Add the repair request timestamp into the blockchain for the particular NFT
+        nft_warranties[_tokenURI].push(block.timestamp);
+        //setting the NFT application status from user's side to not started as it's finished
+        user_warranty_status[_tokenURI] = NOT_STARTED;
+    }
+
     //This is the brand head wallet address to make them the default admin on the blockchain
+    
     address public brandAddress;
 
     constructor() ERC721("FlipCards", "FCRDS") {
@@ -35,6 +79,7 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         _grantRole(HANDLER_ROLE, msg.sender);
         _grantRole(BOOK_KEEPER_ROLE, msg.sender);
         //This way the brand owner will be the Admin since the contract starts
+        
     }
 
     /// Return 'true' if the account belongs to a minter
@@ -106,9 +151,13 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         );
         grantRole(_role, _member);
     }
-
+    function tokenSupply() public view returns (uint256){
+        
+        return _tokenIdCounter.current();
+    }
+    
     /// Safely mint a new NFT
-    function safeMint(address to, string memory uri) public onlyMinter {
+    function safeMint(address to, string memory uri,string memory  _serialNumber) public onlyMinter {
         /**
         to -> contract address on which the NFT needs to be minted
         uri -> The uri of the token generating
@@ -117,6 +166,7 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
         _tokenIdCounter.increment();
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, uri);
+        serial_number_to_token[_serialNumber] = tokenId;
     }
 
     ///utility function to convert a byte32 into a string
@@ -139,15 +189,19 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     }
 
     /// batch mint NFTs
-    function safeMintBatch(address to, string[] calldata _newTokenURIs)
+    function safeMintBatch(address to, string[] calldata _newTokenURIs,string[] calldata _serialNumbers)
         public
         onlyMinter
     {
         uint256 i = 0;
         for (i = 0; i < _newTokenURIs.length; i++) {
             //batch mint NFTs from the given array of token containing tokenURIs
-            safeMint(to, _newTokenURIs[i]);
+            safeMint(to, _newTokenURIs[i],_serialNumbers[i]);
         }
+    }
+
+    function getURIToken(string memory _serialNumber) public view returns (uint256){
+        return serial_number_to_token[_serialNumber];
     }
 
     function updateTokenUri(uint256 _tokenId, string memory _tokenURI)
@@ -163,7 +217,6 @@ contract flipCard is ERC721, ERC721URIStorage, ERC721Burnable, AccessControl {
     }
 
     // The following functions are overrides required by Solidity.
-
     function _burn(uint256 tokenId)
         internal
         override(ERC721, ERC721URIStorage)
