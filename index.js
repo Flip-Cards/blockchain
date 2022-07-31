@@ -1,3 +1,10 @@
+/**
+ * 
+ * This file doesn't updates the contract
+ * It was the initial backend setup for the backend that might interact directly with the Solidity deployed
+ * contract and perform sensitive tasks on the backend
+ */
+
 const express = require("express");
 const server = express();
 const cors = require("cors");

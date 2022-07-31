@@ -1,3 +1,7 @@
+/**
+ * These are the routes which are provided for the backend 
+ */
+
 function routes(server,accounts,flipCard){
     server.get("/all",async (req,res,next)=>{
         console.log(flipCard.methods);

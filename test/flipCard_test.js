@@ -1,3 +1,13 @@
+/**
+ * The following file helps to connect to a local network and validate the FlipCard contract
+ * The function have all the test cases to validate possible scenaios of a warranty card transaction between
+ * the brand and the customer
+ * 
+ * More test can always be added and validated
+ * 
+ * The code requires a local blockchain network running. It was testing using mocha, chai and ganache ehtereum local network
+ */
+
 
 const nftContract = artifacts.require("flipCard");
 
